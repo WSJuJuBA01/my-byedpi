@@ -102,7 +102,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        if (crashed) mainHandler.post { showLog() }
+        if (crashed) {
+            Thread {
+                DebugLog.dumpLogcat(this)
+                mainHandler.post { showLog() }
+            }.start()
+        }
     }
 
     override fun onResume() {
