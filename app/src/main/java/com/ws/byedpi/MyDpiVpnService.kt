@@ -1,9 +1,21 @@
 package com.ws.byedpi
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.Service
+import android.content.ComponentName
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.net.VpnService
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelFileDescriptor
+import android.service.quicksettings.TileService
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import hev.htproxy.TProxyService
 import java.io.File
 
@@ -16,9 +28,15 @@ class MyDpiVpnService : VpnService() {
         @Volatile
         var lastError: String? = null
 
+        @Volatile
+        var onStateChanged: (() -> Unit)? = null
+
         private const val TAG = "WSByeDPI"
         private const val SOCKS_PORT = 1080
         private const val MTU = 8500
+        private const val CHANNEL_ID = "ws_vpn"
+        private const val NOTIF_ID = 1
+        private const val NOTIF_ERR_ID = 2
     }
 
     private var vpnInterface: ParcelFileDescriptor? = null
@@ -30,11 +48,109 @@ class MyDpiVpnService : VpnService() {
         DebugLog.log(this, msg)
     }
 
+    // ---------- Уведомление ----------
+
+    private fun ensureChannel() {
+        if (Build.VERSION.SDK_INT >= 26) {
+            val nm = getSystemService(NotificationManager::class.java)
+            if (nm.getNotificationChannel(CHANNEL_ID) == null) {
+                nm.createNotificationChannel(
+                    NotificationChannel(
+                        CHANNEL_ID,
+                        "Статус WSByeDPI",
+                        NotificationManager.IMPORTANCE_LOW
+                    )
+                )
+            }
+        }
+    }
+
+    private fun buildNotification(text: String): Notification {
+        val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        val openIntent = PendingIntent.getActivity(
+            this, 0, Intent(this, MainActivity::class.java), flags
+        )
+        val stopIntent = PendingIntent.getService(
+            this, 1,
+            Intent(this, MyDpiVpnService::class.java).setAction("STOP"),
+            flags
+        )
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_tile)
+            .setContentTitle("WSByeDPI")
+            .setContentText(text)
+            .setContentIntent(openIntent)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .addAction(0, "Остановить", stopIntent)
+            .build()
+    }
+
+    private fun enterForeground(text: String) {
+        ensureChannel()
+        val n = buildNotification(text)
+        try {
+            if (Build.VERSION.SDK_INT >= 34) {
+                startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            } else {
+                startForeground(NOTIF_ID, n)
+            }
+        } catch (t: Throwable) {
+            d("startForeground failed: $t")
+        }
+    }
+
+    private fun leaveForeground() {
+        try {
+            stopForeground(Service.STOP_FOREGROUND_REMOVE)
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun updateNotification(text: String) {
+        try {
+            getSystemService(NotificationManager::class.java)
+                .notify(NOTIF_ID, buildNotification(text))
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun showError(text: String) {
+        try {
+            ensureChannel()
+            val n = NotificationCompat.Builder(this, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_tile)
+                .setContentTitle("WSByeDPI: ошибка")
+                .setContentText(text)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+                .setAutoCancel(true)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .build()
+            getSystemService(NotificationManager::class.java).notify(NOTIF_ERR_ID, n)
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun notifyState() {
+        try {
+            TileService.requestListeningState(
+                this, ComponentName(this, VpnTileService::class.java)
+            )
+        } catch (_: Throwable) {
+        }
+        Handler(Looper.getMainLooper()).post { onStateChanged?.invoke() }
+    }
+
+    // ---------- Команды ----------
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             "START" -> {
                 val apps = intent.getStringArrayListExtra("TARGET_APPS") ?: arrayListOf()
                 val args = intent.getStringExtra("ARGS") ?: ""
+                enterForeground("Запуск…")
                 Thread {
                     try {
                         startAll(apps, args)
@@ -46,12 +162,22 @@ class MyDpiVpnService : VpnService() {
                         } catch (_: Throwable) {
                         }
                     }
+                    if (isRunning) {
+                        updateNotification("Работает · приложений: ${apps.size}")
+                    } else {
+                        lastError?.let { showError(it) }
+                        leaveForeground()
+                        stopSelf()
+                    }
+                    notifyState()
                 }.start()
             }
             "STOP" -> Thread {
                 d("STOP requested")
                 stopInternal()
+                leaveForeground()
                 stopSelf()
+                notifyState()
             }.start()
         }
         return START_NOT_STICKY
@@ -165,7 +291,7 @@ class MyDpiVpnService : VpnService() {
             val cfg = File(filesDir, "tproxy.yml")
             cfg.writeText(yaml)
             val hev = File(applicationInfo.nativeLibraryDir, "libhev-socks5-tunnel.so")
-            d("STEP 5a: hev lib exists=${hev.exists()} size=${hev.length()} abis=${android.os.Build.SUPPORTED_ABIS.joinToString()}")
+            d("STEP 5a: hev lib exists=${hev.exists()} size=${hev.length()}")
             Class.forName("hev.htproxy.TProxyService")
             d("STEP 5b: lib loaded, calling TProxyStartService")
             val ok = TProxyService.TProxyStartService(cfg.absolutePath, pfd.fd)
@@ -207,11 +333,14 @@ class MyDpiVpnService : VpnService() {
     override fun onRevoke() {
         d("onRevoke")
         stopInternal()
+        leaveForeground()
+        notifyState()
         super.onRevoke()
     }
 
     override fun onDestroy() {
         stopInternal()
+        notifyState()
         super.onDestroy()
     }
 }
