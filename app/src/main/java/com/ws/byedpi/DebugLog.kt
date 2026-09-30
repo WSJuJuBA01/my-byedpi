@@ -24,6 +24,26 @@ object DebugLog {
         }
     }
 
+    fun dumpLogcat(ctx: Context) {
+        try {
+            val p = Runtime.getRuntime().exec(
+                arrayOf("logcat", "-d", "-t", "800", "-v", "brief")
+            )
+            val lines = p.inputStream.bufferedReader().readLines()
+            val keys = listOf(
+                "F/", "Fatal signal", "Abort", "JNI", "hev", "E/art",
+                "AndroidRuntime", "WSByeDPI", "linker", "CheckJNI"
+            )
+            val picked = lines
+                .filter { l -> keys.any { l.contains(it) } }
+                .takeLast(40)
+                .map { it.take(220) }
+            log(ctx, "LOGCAT >>>\n" + picked.joinToString("\n"))
+        } catch (e: Exception) {
+            log(ctx, "logcat failed: $e")
+        }
+    }
+
     @Synchronized
     fun read(ctx: Context): String {
         return try {
