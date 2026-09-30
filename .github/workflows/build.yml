@@ -22,6 +22,43 @@ jobs:
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;25.1.8937393"
 
+      - name: Build native (ByeDPI + tun2socks)
+        run: |
+          set -e
+          NDK="$ANDROID_HOME/ndk/25.1.8937393"
+          TC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          OUT="$GITHUB_WORKSPACE/app/src/main/jniLibs"
+          mkdir -p "$RUNNER_TEMP/native"
+          cd "$RUNNER_TEMP/native"
+
+          # ---- ByeDPI: proxy executable, packed as libbyedpi.so ----
+          git clone --depth 1 https://github.com/hufrea/byedpi.git byedpi
+          cd byedpi
+          SRC=$(ls *.c | grep -v '^win')
+          build_byedpi() {
+            cc="$1"; abi="$2"
+            mkdir -p "$OUT/$abi"
+            "$TC/$cc" -O2 -s -std=gnu99 -D_DEFAULT_SOURCE -fPIE -pie -w -I. $SRC -o "$OUT/$abi/libbyedpi.so" \
+            || "$TC/$cc" -O2 -s -std=gnu99 -D_DEFAULT_SOURCE -fPIE -pie -w -I. \
+                 -include sys/syscall.h '-Dmemfd_create(n,f)=syscall(__NR_memfd_create,n,f)' \
+                 $SRC -o "$OUT/$abi/libbyedpi.so"
+          }
+          build_byedpi aarch64-linux-android24-clang arm64-v8a
+          build_byedpi armv7a-linux-androideabi24-clang armeabi-v7a
+          cd ..
+
+          # ---- tun2socks: hev-socks5-tunnel via ndk-build ----
+          mkdir -p tun/jni
+          cd tun
+          git clone --depth 1 --recursive --shallow-submodules https://github.com/heiher/hev-socks5-tunnel.git jni/hev-socks5-tunnel
+          echo 'include $(call all-subdir-makefiles)' > jni/Android.mk
+          printf 'APP_OPTIM := release\nAPP_PLATFORM := android-24\nAPP_ABI := arm64-v8a armeabi-v7a\nAPP_CFLAGS := -O3 -DPKGNAME=hev/htproxy -DCLSNAME=TProxyService\n' > jni/Application.mk
+          "$NDK/ndk-build" -j"$(nproc)"
+          for abi in arm64-v8a armeabi-v7a; do
+            mkdir -p "$OUT/$abi"
+            cp "libs/$abi/libhev-socks5-tunnel.so" "$OUT/$abi/"
+          done
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
