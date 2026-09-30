@@ -1,10 +1,12 @@
 package com.ws.byedpi
 
+import android.Manifest
 import android.app.ActivityManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.net.VpnService
 import android.os.Build
@@ -21,6 +23,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.widget.doAfterTextChanged
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -54,6 +57,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private val notifPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -68,6 +75,13 @@ class MainActivity : AppCompatActivity() {
         val crashed = logLastExitReason()
 
         loadSavedPrefs()
+
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
 
         findViewById<Button>(R.id.btnPreset1).setOnClickListener { etArgs.setText(PRESET_MAX) }
         findViewById<Button>(R.id.btnPreset2).setOnClickListener { etArgs.setText(PRESET_CLASSIC) }
@@ -110,6 +124,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        MyDpiVpnService.onStateChanged = { refreshButton() }
+    }
+
+    override fun onStop() {
+        MyDpiVpnService.onStateChanged = null
+        super.onStop()
+    }
+
     override fun onResume() {
         super.onResume()
         refreshButton()
@@ -144,7 +168,7 @@ class MainActivity : AppCompatActivity() {
                 else -> "OTHER(${info.reason})"
             }
             DebugLog.log(this, "EXIT reason=$name status=${info.status} desc=${info.description}")
-            info.reason == 2 || info.reason == 4 || info.reason == 5
+            info.reason == 4 || info.reason == 5
         } catch (_: Exception) {
             false
         }
@@ -229,7 +253,7 @@ class MainActivity : AppCompatActivity() {
             putStringArrayListExtra("TARGET_APPS", ArrayList(selectedPackages))
             putExtra("ARGS", etArgs.text.toString())
         }
-        startService(intent)
+        ContextCompat.startForegroundService(this, intent)
         mainHandler.postDelayed({
             refreshButton()
             MyDpiVpnService.lastError?.let {
