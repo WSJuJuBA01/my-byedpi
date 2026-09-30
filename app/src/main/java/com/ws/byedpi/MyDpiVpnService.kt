@@ -168,7 +168,13 @@ class MyDpiVpnService : VpnService() {
             d("STEP 5a: hev lib exists=${hev.exists()} size=${hev.length()} abis=${android.os.Build.SUPPORTED_ABIS.joinToString()}")
             Class.forName("hev.htproxy.TProxyService")
             d("STEP 5b: lib loaded, calling TProxyStartService")
-            TProxyService.TProxyStartService(cfg.absolutePath, pfd.fd)
+            val ok = TProxyService.TProxyStartService(cfg.absolutePath, pfd.fd)
+            d("STEP 5c: TProxyStartService returned $ok")
+            if (!ok) {
+                lastError = "tun2socks не запустился"
+                stopInternal()
+                return
+            }
             tunnelStarted = true
             isRunning = true
             d("STEP 6: tunnel started OK")
