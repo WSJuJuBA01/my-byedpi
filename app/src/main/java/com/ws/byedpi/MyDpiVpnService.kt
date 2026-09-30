@@ -164,7 +164,8 @@ class MyDpiVpnService : VpnService() {
         try {
             val cfg = File(filesDir, "tproxy.yml")
             cfg.writeText(yaml)
-            d("STEP 5a: loading libhev-socks5-tunnel")
+            val hev = File(applicationInfo.nativeLibraryDir, "libhev-socks5-tunnel.so")
+            d("STEP 5a: hev lib exists=${hev.exists()} size=${hev.length()} abis=${android.os.Build.SUPPORTED_ABIS.joinToString()}")
             Class.forName("hev.htproxy.TProxyService")
             d("STEP 5b: lib loaded, calling TProxyStartService")
             TProxyService.TProxyStartService(cfg.absolutePath, pfd.fd)
