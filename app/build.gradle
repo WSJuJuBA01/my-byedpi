@@ -24,6 +24,12 @@ android {
             useLegacyPackaging = true
         }
     }
+    
+    buildTypes {
+        debug {
+            debuggable false
+        }
+    }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
