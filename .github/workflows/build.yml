@@ -68,8 +68,13 @@ jobs:
       - name: Build Debug APK
         run: gradle assembleDebug
 
+      - name: Show output files
+        if: always()
+        run: find app/build/outputs -type f | head -50 || true
+
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WSByeDPI-Android
-          path: app/build/outputs/apk/debug/WSByeDPI-Beta.apk
+          name: WSByeDPI-Debug.apk
+          path: app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
