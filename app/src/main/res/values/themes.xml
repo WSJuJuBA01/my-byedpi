@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.WSByeDPI" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#7C4DFF</item>
+        <item name="colorPrimaryVariant">#651FFF</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+    </style>
+</resources>
