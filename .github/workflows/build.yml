@@ -53,6 +53,7 @@ jobs:
           git clone --depth 1 --recursive --shallow-submodules https://github.com/heiher/hev-socks5-tunnel.git jni/hev-socks5-tunnel
           echo 'include $(call all-subdir-makefiles)' > jni/Android.mk
           printf 'APP_OPTIM := release\nAPP_PLATFORM := android-24\nAPP_ABI := arm64-v8a armeabi-v7a\nAPP_CFLAGS := -O3 -DPKGNAME=hev/htproxy -DCLSNAME=TProxyService\n' > jni/Application.mk
+          grep -nE "TProxy|PKGNAME|CLSNAME" jni/hev-socks5-tunnel/src/hev-jni.c || true
           "$NDK/ndk-build" -j"$(nproc)"
           for abi in arm64-v8a armeabi-v7a; do
             mkdir -p "$OUT/$abi"
@@ -70,5 +71,5 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WSByeDPI-Debug.apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: WSByeDPI-Android
+          path: app/build/outputs/apk/debug/WSByeDPI-Beta.apk
