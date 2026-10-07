@@ -15,16 +15,16 @@ object Config {
     )
 
     val strategies: List<Strategy> = listOf(
-        Strategy("Обычный", "Фейк-пакет с подменой SNI. Рекомендуется") { sni ->
+        Strategy("Обход #1", "Режим с подменой SNI. Рекомендуется") { sni ->
             "-f350 -Qr -f-1+sh -t6 -Qr -a4 -m3 -n $sni"
         },
-        Strategy("Агрессивный", "Много разбиений и fake. Если «Обычный» не помог") { _ ->
+        Strategy("Обход #2", "Режим с много разбиений и fake.") { _ ->
             "--disorder 1 --split 2+s --tlsrec 2+s --auto=torst,ssl_err --timeout 3 " +
                 "--disorder 1 --disorder 3+s --split 6+s --disorder 9+s --split 12+s " +
                 "--disorder 15+s --split 20+s --disorder 25+s --split 30+s --disorder 35+s " +
                 "--tlsrec 1+s --fake -40 --ttl 8 --md5sig --udp-fake 3"
         },
-        Strategy("Мягкий", "Без фейков: split + tlsrec. Если фейки ломают сайты") { _ ->
+        Strategy("Обход #3", "Режим если fake ломает сайты. А так можно просто так использовать") { _ ->
             "--split 1+s --disorder 3+s --tlsrec 3+h --mod-http=h,d --auto=torst"
         }
     )
