@@ -14,9 +14,12 @@ object Config {
         val build: (String) -> String
     )
 
+    private fun fake(ttl: Int, sni: String) =
+        "-f350 -Qr -f-1+sh -t$ttl -Qr -a4 -m3 -n $sni"
+
     val strategies: List<Strategy> = listOf(
         Strategy("Обход #1", "Режим с подменой SNI. Рекомендуется") { sni ->
-            "-f350 -Qr -f-1+sh -t6 -Qr -a4 -m3 -n $sni"
+            fake(6, sni)
         },
         Strategy("Обход #2", "Режим с много разбиений и fake.") { _ ->
             "--disorder 1 --split 2+s --tlsrec 2+s --auto=torst,ssl_err --timeout 3 " +
@@ -26,6 +29,40 @@ object Config {
         },
         Strategy("Обход #3", "Режим если fake ломает сайты. А так можно просто так использовать") { _ ->
             "--split 1+s --disorder 3+s --tlsrec 3+h --mod-http=h,d --auto=torst"
+        },
+        Strategy("Обход #4", "Как #1, но TTL 4") { sni -> fake(4, sni) },
+        Strategy("Обход #5", "Как #1, но TTL 5") { sni -> fake(5, sni) },
+        Strategy("Обход #6", "Как #1, но TTL 7") { sni -> fake(7, sni) },
+        Strategy("Обход #7", "Как #1, но TTL 8") { sni -> fake(8, sni) },
+        Strategy("Обход #8", "Как #1, но TTL 10") { sni -> fake(10, sni) },
+        Strategy("Обход #9", "Как #1, подмена SNI на max.ru") { _ -> fake(6, "max.ru") },
+        Strategy("Обход #10", "Как #1, подмена SNI на ya.ru") { _ -> fake(6, "ya.ru") },
+        Strategy("Обход #11", "Как #1, подмена SNI на vk.com") { _ -> fake(6, "vk.com") },
+        Strategy("Обход #12", "Как #1, подмена SNI на gosuslugi.ru") { _ -> fake(6, "gosuslugi.ru") },
+        Strategy("Обход #13", "Классика: split + disorder + tlsrec, без фейков") { _ ->
+            "-s 1+s -d 3+s -r 1+s -M h,d"
+        },
+        Strategy("Обход #14", "Split и disorder с авто-переключением при сбое") { _ ->
+            "--split 2+s --disorder 4+s --tlsrec 2+s --auto=torst,ssl_err"
+        },
+        Strategy("Обход #15", "OOB-вставка + tlsrec") { _ ->
+            "--oob 3+s --tlsrec 1+s"
+        },
+        Strategy("Обход #16", "Disoob + tlsrec") { _ ->
+            "--disoob 1+s --tlsrec 1+s"
+        },
+        Strategy("Обход #17", "Fake + md5sig + split") { _ ->
+            "--fake -1 --ttl 6 --md5sig --split 1+s --tlsrec 1+s"
+        },
+        Strategy("Обход #18", "Split + правки HTTP-заголовков") { _ ->
+            "--split 1 --disorder 2 --tlsrec 1+s --mod-http=h,d,r"
+        },
+        Strategy("Обход #19", "Комбо: #1 + split и disorder") { sni ->
+            fake(6, sni) + " -s 1+s -d 3+s"
+        },
+        Strategy("Обход #20", "Максимальный: split + fake SNI + авто-переключение") { sni ->
+            "--split 1+s --disorder 3+s --tlsrec 1+s --auto=torst,ssl_err --timeout 3 " +
+                fake(6, sni)
         }
     )
 
