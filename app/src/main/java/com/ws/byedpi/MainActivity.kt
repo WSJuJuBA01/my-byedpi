@@ -5,35 +5,34 @@ import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.graphics.Color
-import android.graphics.Typeface
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.view.ViewGroup
 import android.widget.Button
-import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.core.graphics.ColorUtils
-import com.google.android.material.card.MaterialCardView
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.PagerSnapHelper
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.color.MaterialColors
 
 class MainActivity : AppCompatActivity() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val cards = ArrayList<MaterialCardView>()
-    private val titles = ArrayList<TextView>()
     private lateinit var btnStart: Button
     private lateinit var tvStatus: TextView
     private lateinit var tvAppsInfo: TextView
-    private lateinit var llModes: LinearLayout
+    private lateinit var tvModeInfo: TextView
+    private lateinit var rvModes: RecyclerView
+    private lateinit var modeAdapter: ModeAdapter
 
     private val vpnPermission = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -56,7 +55,8 @@ class MainActivity : AppCompatActivity() {
         btnStart = findViewById(R.id.btnStart)
         tvStatus = findViewById(R.id.tvStatus)
         tvAppsInfo = findViewById(R.id.tvAppsInfo)
-        llModes = findViewById(R.id.llModes)
+        tvModeInfo = findViewById(R.id.tvModeInfo)
+        rvModes = findViewById(R.id.rvModes)
 
         val crashed = logLastExitReason()
 
@@ -67,7 +67,7 @@ class MainActivity : AppCompatActivity() {
             notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
 
-        buildModeCards()
+        setupModes()
 
         findViewById<Button>(R.id.btnSettings).setOnClickListener { openSettings() }
         tvAppsInfo.setOnClickListener { openSettings() }
@@ -96,7 +96,6 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refresh()
-        renderModes()
         updateInfo()
     }
 
@@ -104,76 +103,39 @@ class MainActivity : AppCompatActivity() {
         startActivity(Intent(this, SettingsActivity::class.java))
     }
 
-    // ---------- Кнопки-стратегии ----------
+    // ---------- Режимы обхода (карусель) ----------
 
-    private fun buildModeCards() {
-        llModes.removeAllViews()
-        cards.clear()
-        titles.clear()
-        val dp = resources.displayMetrics.density
-        val pad = (14 * dp).toInt()
+    private fun setupModes() {
+        val lm = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        rvModes.layoutManager = lm
+        modeAdapter = ModeAdapter { i -> selectMode(i) }
+        modeAdapter.select(Config.mode(this))
+        rvModes.adapter = modeAdapter
+        PagerSnapHelper().attachToRecyclerView(rvModes)
 
-        Config.strategies.forEachIndexed { i, s ->
-            val card = MaterialCardView(this).apply {
-                layoutParams = LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply { bottomMargin = (8 * dp).toInt() }
-                radius = 12 * dp
-                cardElevation = 0f
-                isClickable = true
-                isFocusable = true
-                setOnClickListener { selectMode(i) }
-            }
-            val box = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(pad, pad, pad, pad)
-            }
-            val title = TextView(this).apply {
-                text = s.title
-                textSize = 16f
-                typeface = Typeface.DEFAULT_BOLD
-            }
-            val desc = TextView(this).apply {
-                text = s.desc
-                textSize = 12f
-                alpha = 0.7f
-            }
-            box.addView(title)
-            box.addView(desc)
-            card.addView(box)
-            llModes.addView(card)
-            cards.add(card)
-            titles.add(title)
+        rvModes.post {
+            val itemW = (260 * resources.displayMetrics.density).toInt()
+            val side = ((rvModes.width - itemW) / 2).coerceAtLeast(0)
+            rvModes.setPadding(side, 0, side, 0)
+            rvModes.clipToPadding = false
+            lm.scrollToPositionWithOffset(Config.mode(this), 0)
         }
-        renderModes()
-    }
-
-    private fun renderModes() {
-        if (cards.isEmpty()) return
-        val sel = Config.mode(this)
-        val dp = resources.displayMetrics.density
-        val primary = MaterialColors.getColor(
-            this, com.google.android.material.R.attr.colorPrimary, Color.MAGENTA
-        )
-        val surface = MaterialColors.getColor(
-            this, com.google.android.material.R.attr.colorSurface, Color.DKGRAY
-        )
-        cards.forEachIndexed { i, c ->
-            val on = i == sel
-            c.strokeWidth = ((if (on) 3 else 1) * dp).toInt()
-            c.strokeColor = if (on) primary else 0x33888888
-            c.setCardBackgroundColor(if (on) ColorUtils.setAlphaComponent(primary, 45) else surface)
-            titles[i].text = (if (on) "✓  " else "") + Config.strategies[i].title
-        }
+        updateModeInfo()
     }
 
     private fun selectMode(i: Int) {
         Config.setMode(this, i)
-        renderModes()
+        modeAdapter.select(i)
+        rvModes.smoothScrollToPosition(i)
+        updateModeInfo()
         if (MyDpiVpnService.isRunning) {
             Toast.makeText(this, "Применится после перезапуска", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun updateModeInfo() {
+        val s = Config.strategies[Config.mode(this)]
+        tvModeInfo.text = "Выбран: ${s.title} · листай ← →, тап чтобы выбрать"
     }
 
     // ---------- Запуск / остановка ----------
@@ -242,7 +204,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun refresh() {
         val on = MyDpiVpnService.isRunning
+        val primary = MaterialColors.getColor(
+            this, com.google.android.material.R.attr.colorPrimary, Color.MAGENTA
+        )
         btnStart.text = if (on) "ОСТАНОВИТЬ" else "ЗАПУСТИТЬ"
+        btnStart.backgroundTintList =
+            ColorStateList.valueOf(if (on) Color.parseColor("#2E7D32") else primary)
         tvStatus.text = if (on) "● Работает" else "○ Остановлен"
         tvStatus.setTextColor(if (on) Color.parseColor("#4CAF50") else Color.GRAY)
     }
@@ -254,7 +221,7 @@ class MainActivity : AppCompatActivity() {
             "Приложения: выбрано ${Config.apps(this).size}"
         }
         val extra = if (Config.customOn(this)) {
-            "\nВключены свои аргументы: стратегии выше не используются"
+            "\nВключены свои аргументы: режимы выше не используются"
         } else ""
         tvAppsInfo.text = "$base$extra\nИзменить: ⚙ Настройки"
     }
