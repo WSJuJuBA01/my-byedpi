@@ -39,6 +39,10 @@
             android:exported="false"
             android:windowSoftInputMode="stateHidden|adjustResize" />
 
+        <activity
+            android:name=".TestActivity"
+            android:exported="false" />
+
         <service
             android:name=".MyDpiVpnService"
             android:permission="android.permission.BIND_VPN_SERVICE"
