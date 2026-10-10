@@ -22,12 +22,18 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.PagerSnapHelper
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.color.MaterialColors
+import com.google.android.material.floatingactionbutton.FloatingActionButton
 
 class MainActivity : AppCompatActivity() {
 
+    // Цвета кнопки: фон и иконка в выключенном и включённом состоянии
+    private val colorOffBg = Color.parseColor("#CBB8FF")
+    private val colorOffIcon = Color.parseColor("#2A0F66")
+    private val colorOnBg = Color.parseColor("#9FE0A0")
+    private val colorOnIcon = Color.parseColor("#0B3D13")
+
     private val mainHandler = Handler(Looper.getMainLooper())
-    private lateinit var btnStart: Button
+    private lateinit var btnStart: FloatingActionButton
     private lateinit var tvStatus: TextView
     private lateinit var tvAppsInfo: TextView
     private lateinit var tvModeInfo: TextView
@@ -103,10 +109,10 @@ class MainActivity : AppCompatActivity() {
         startActivity(Intent(this, SettingsActivity::class.java))
     }
 
-    // ---------- Режимы обхода (карусель) ----------
+    // ---------- Режимы обхода (листание вверх и вниз) ----------
 
     private fun setupModes() {
-        val lm = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        val lm = LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false)
         rvModes.layoutManager = lm
         modeAdapter = ModeAdapter { i -> selectMode(i) }
         modeAdapter.select(Config.mode(this))
@@ -114,9 +120,9 @@ class MainActivity : AppCompatActivity() {
         PagerSnapHelper().attachToRecyclerView(rvModes)
 
         rvModes.post {
-            val itemW = (260 * resources.displayMetrics.density).toInt()
-            val side = ((rvModes.width - itemW) / 2).coerceAtLeast(0)
-            rvModes.setPadding(side, 0, side, 0)
+            val itemH = (92 * resources.displayMetrics.density).toInt()
+            val side = ((rvModes.height - itemH) / 2).coerceAtLeast(0)
+            rvModes.setPadding(0, side, 0, side)
             rvModes.clipToPadding = false
             lm.scrollToPositionWithOffset(Config.mode(this), 0)
         }
@@ -135,7 +141,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateModeInfo() {
         val s = Config.strategies[Config.mode(this)]
-        tvModeInfo.text = "Выбран: ${s.title} · листай ← →, тап чтобы выбрать"
+        tvModeInfo.text = "Выбран: ${s.title} · листай ↑ ↓, тап чтобы выбрать"
     }
 
     // ---------- Запуск / остановка ----------
@@ -189,7 +195,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun runTest() {
         if (!MyDpiVpnService.isRunning) {
-            Toast.makeText(this, "Сначала нажми ЗАПУСТИТЬ", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Сначала включи VPN", Toast.LENGTH_SHORT).show()
             return
         }
         Toast.makeText(this, "Проверяю, до 15 сек…", Toast.LENGTH_SHORT).show()
@@ -204,14 +210,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun refresh() {
         val on = MyDpiVpnService.isRunning
-        val primary = MaterialColors.getColor(
-            this, com.google.android.material.R.attr.colorPrimary, Color.MAGENTA
-        )
-        btnStart.text = if (on) "ОСТАНОВИТЬ" else "ЗАПУСТИТЬ"
-        btnStart.backgroundTintList =
-            ColorStateList.valueOf(if (on) Color.parseColor("#2E7D32") else primary)
-        tvStatus.text = if (on) "● Работает" else "○ Остановлен"
-        tvStatus.setTextColor(if (on) Color.parseColor("#4CAF50") else Color.GRAY)
+        btnStart.backgroundTintList = ColorStateList.valueOf(if (on) colorOnBg else colorOffBg)
+        btnStart.imageTintList = ColorStateList.valueOf(if (on) colorOnIcon else colorOffIcon)
+        btnStart.contentDescription = if (on) "Отключить" else "Подключить"
+        tvStatus.text = if (on) "Подключено (VPN)" else "Отключено (VPN)"
+        tvStatus.setTextColor(if (on) Color.parseColor("#81C784") else Color.GRAY)
     }
 
     private fun updateInfo() {
