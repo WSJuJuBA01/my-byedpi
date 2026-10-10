@@ -78,7 +78,9 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnSettings).setOnClickListener { openSettings() }
         tvAppsInfo.setOnClickListener { openSettings() }
         findViewById<Button>(R.id.btnLog).setOnClickListener { UiUtil.showLog(this) }
-        findViewById<Button>(R.id.btnTest).setOnClickListener { runTest() }
+        findViewById<Button>(R.id.btnTest).setOnClickListener {
+            startActivity(Intent(this, TestActivity::class.java))
+                }
         btnStart.setOnClickListener { onStartClick() }
 
         if (crashed) {
